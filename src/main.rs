@@ -5,6 +5,7 @@ const WIDTH: u32 = 1200;
 const HEIGHT: u32 = 800;
 const UI_WINDOW_WIDTH: u32 = 260;
 const UI_WINDOW_HEIGHT: u32 = 140;
+const REPEL_RADIUS: f32 = 200.0;
 
 const LINE_LENGTH: f32 = 8.0;
 
@@ -52,7 +53,7 @@ fn model(app: &App) -> Model {
 
     let horizontal_velocity = random_range(20.0, 40.0);
 
-    let raindrops = (0..800)
+    let raindrops = (0..1200)
         .map(|_| {
             let x = random_range(WIDTH as f32 * -1.0, WIDTH as f32);
             let y = random_range(300.0, 600.0);
@@ -81,6 +82,7 @@ fn model(app: &App) -> Model {
 fn update(app: &App, model: &mut Model, _update: Update) {
     let dt = app.duration.since_prev_update.as_secs_f32();
     let main_window_rect = app.window(model.main_window).unwrap();
+    let mouse_position = app.mouse.position();
 
     if model.update_velocities {
         for raindrop in model.raindrops.iter_mut() {
@@ -91,8 +93,20 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
     for raindrop in model.raindrops.iter_mut() {
         raindrop.position += raindrop.velocity * dt;
+
+        // Check the distance between the mouse and the raindrop
+        let distance = raindrop.position.distance(mouse_position);
+
+        // If the distance is within a certain radius (e.g., 50.0), repel the raindrop
+        if distance < REPEL_RADIUS {
+            let repel_force =
+                (mouse_position - raindrop.position).normalize() * (REPEL_RADIUS - distance) * 2.0;
+            raindrop.position -= repel_force * dt;
+        }
+
         if raindrop.position.y < main_window_rect.rect().bottom() {
             raindrop.position.y = main_window_rect.rect().top();
+            raindrop.position.x = random_range(WIDTH as f32 * -1.0, WIDTH as f32);
         }
     }
 
