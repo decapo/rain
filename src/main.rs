@@ -6,12 +6,21 @@ const HEIGHT: u32 = 800;
 const UI_WINDOW_WIDTH: u32 = 260;
 const UI_WINDOW_HEIGHT: u32 = 140;
 const REPEL_RADIUS: f32 = 200.0;
+const RAIN_FACTOR: f32 = 1.0;
 
 const LINE_LENGTH: f32 = 8.0;
+
+enum RaindropShape {
+    Line,
+    Circle,
+    Triangle,
+    Star,
+}
 
 struct Model {
     main_window: WindowId,
     raindrops: Vec<Raindrop>,
+    raindrop_shape: RaindropShape,
     hue: f32,
     min_velocity: f32,
     max_velocity: f32,
@@ -71,6 +80,7 @@ fn model(app: &App) -> Model {
     Model {
         main_window,
         raindrops,
+        raindrop_shape: RaindropShape::Line,
         hue: 0.0,
         min_velocity: 20.0,
         max_velocity: 200.0,
@@ -119,15 +129,47 @@ fn view(app: &App, model: &Model, frame: Frame) {
     draw.background().color(BLACK);
 
     for raindrop in &model.raindrops {
-        let (start, end) = (
-            raindrop.position,
-            raindrop.position + vec2(-1.5, LINE_LENGTH),
-        );
-        draw.line()
-            .start(start)
-            .end(end)
-            .weight(3.0) // Adjust the line thickness here
-            .color(raindrop.color);
+        match model.raindrop_shape {
+            RaindropShape::Line => {
+                let (start, end) = (
+                    raindrop.position,
+                    raindrop.position + vec2(-1.5, LINE_LENGTH),
+                );
+                draw.line()
+                    .start(start)
+                    .end(end)
+                    .weight(RAIN_FACTOR * 5.0)
+                    .color(raindrop.color);
+            }
+            RaindropShape::Circle => {
+                draw.ellipse()
+                    .xy(raindrop.position)
+                    .radius(RAIN_FACTOR * 5.0)
+                    .color(raindrop.color);
+            }
+            RaindropShape::Triangle => {
+                let points = [
+                    raindrop.position + vec2(0.0, RAIN_FACTOR * 5.0),
+                    raindrop.position + vec2(RAIN_FACTOR * -5.0, RAIN_FACTOR * -5.0),
+                    raindrop.position + vec2(RAIN_FACTOR * 5.0, -RAIN_FACTOR * 5.0),
+                ];
+                draw.polygon().points(points).color(raindrop.color);
+            }
+            RaindropShape::Star => {
+                let star_points = (0..10)
+                    .map(|i| {
+                        let angle = i as f32 * 2.0 * PI / 10.0;
+                        let radius = if i % 2 == 0 { 6.0 } else { 3.0 };
+                        raindrop.position
+                            + vec2(
+                                angle.cos() * RAIN_FACTOR * radius,
+                                angle.sin() * RAIN_FACTOR * radius,
+                            )
+                    })
+                    .collect::<Vec<_>>();
+                draw.polygon().points(star_points).color(raindrop.color);
+            }
+        }
     }
 
     draw.to_frame(app, &frame).unwrap();
@@ -143,8 +185,10 @@ fn raw_ui_event(_app: &App, model: &mut Model, event: &nannou::winit::event::Win
 
 fn update_ui(model: &mut Model) {
     let ctx = model.ui.begin_frame();
+
     egui::Window::new("Control Panel")
         .collapsible(false)
+        .fixed_pos([10.0, 7.0])
         .show(&ctx, |ui| {
             ui.add(egui::Slider::new(&mut model.hue, 0.0..=1.0).text("Color Hue"));
 
@@ -163,6 +207,15 @@ fn update_ui(model: &mut Model) {
 
             for raindrop in &mut model.raindrops {
                 raindrop.color = hsv(model.hue, 1.0, 1.0);
+            }
+
+            if ui.button("Change Rain Shape").clicked() {
+                model.raindrop_shape = match model.raindrop_shape {
+                    RaindropShape::Line => RaindropShape::Circle,
+                    RaindropShape::Circle => RaindropShape::Triangle,
+                    RaindropShape::Triangle => RaindropShape::Star,
+                    RaindropShape::Star => RaindropShape::Line,
+                };
             }
         });
 }
